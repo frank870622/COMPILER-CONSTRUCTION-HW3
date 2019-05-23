@@ -49,14 +49,11 @@ int index_num = 0;
 int function_parameter_num = 0;
 int variable_declare_count = 0;
 int function_initial_flag = 0;
-int function_has_declare_flag = 0;
 int function_parameter_array[512];
 char error_buf[128];
 int had_print_flag = 0;
 int dump_scope_flag = -1;
 int syntax_error_flag = 0;
-int print_error_flag = 0;
-
 void reset_function_array();
 void print_error(char*, char*);
 void can_dump(int);
@@ -71,7 +68,6 @@ void can_dump(int);
     int i_val;
     double f_val;
     char* string;
-    char char_array[50];
     float variable_pack[2];   //0: value  1:
 }
 
@@ -108,15 +104,12 @@ void can_dump(int);
 
 /* Nonterminal with return, which need to sepcify type */
 %type <i_val> type
-%type <char_array> function_declation_part1
 %type <variable_pack> value
 %type <variable_pack> value_stat
 %type <variable_pack> lv3_arithmetic_stat
 %type <variable_pack> lv2_arithmetic_stat
 %type <variable_pack> arithmetic_stat
 %type <variable_pack> initializer
-%type <variable_pack> function_call
-
 
 /* Yacc will start at this nonterminal */
 %start program
@@ -197,32 +190,24 @@ arithmetic_stat
 ;
 
 lv2_arithmetic_stat
-    : lv3_arithmetic_stat MUL lv2_arithmetic_stat { $$[0] = $1[0] * $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
-    | lv3_arithmetic_stat DIV lv2_arithmetic_stat 
+    : lv3_arithmetic_stat MUL lv2_arithmetic_stat   { $$[0] = $1[0] * $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
+    | lv3_arithmetic_stat DIV lv2_arithmetic_stat   
     { 
         //printf("the value of diver %f\n", $3);
         if($3[0] == 0) {
-            print_error("Divided by Zero", "");
-            $$[0] = 0;
+            yyerror("Divided by Zero");
         }
-        else{
-            $$[0] = $1[0] / $3[0]; 
-        }
+        $$[0] = $1[0] / $3[0]; 
         $$[1] = ($1[1]==2 || $3[1]==2)? 2:1;
     }
-    | lv3_arithmetic_stat MOD lv2_arithmetic_stat
+    | lv3_arithmetic_stat MOD lv2_arithmetic_stat   
     { 
         if ($1[1] != 1 || $3[1] != 1)
-            print_error("invalid operands to binary %", "");
+            yyerror("invalid operands to binary %");
         if($3[0] == 0) {
-            print_error("Mod by Zero", "");
+            yyerror("Mod by Zero");
         }
-        if($3[0] == 0 || $1[1] != 1 || $3[1] != 1){
-            $$[0] = 0;
-        }
-        else{
-            $$[0] = (int)$1[0] % (int)$3[0]; 
-        }
+        $$[0] = (int)$1[0] % (int)$3[0]; 
         $$[1] = 1;
     }
     | lv3_arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
@@ -230,29 +215,27 @@ lv2_arithmetic_stat
 ;
 
 lv3_arithmetic_stat
-    : INC lv3_arithmetic_stat   { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
-    | DEC lv3_arithmetic_stat   { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
-    | lv3_arithmetic_stat INC   { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | lv3_arithmetic_stat DEC   { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | value_stat                { $$[0] = $1[0]; $$[1] = $1[1]; }
+    : INC lv3_arithmetic_stat { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
+    | DEC lv3_arithmetic_stat { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
+    | lv3_arithmetic_stat INC { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | lv3_arithmetic_stat DEC { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | value_stat { $$[0] = $1[0]; $$[1] = $1[1]; }
     | LB lv3_arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
 
-
-
 value_stat
-    : ADD value_stat    { $$[0] = $2[0] * 1; $$[1] = $2[1]; }
-    | SUB value_stat    { $$[0] = $2[0] * -1; $$[1] = $2[1]; }
+    : ADD value_stat { $$[0] = $2[0] * 1; $$[1] = $2[1]; }
+    | SUB value_stat { $$[0] = $2[0] * -1; $$[1] = $2[1]; }
     | STRING_TEXT   { }
     | value { $$[0] = $1[0]; $$[1] = $1[1]; }
     | LB value_stat RB  { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
 
 value
-    : I_CONST   { $$[0] = $1; $$[1] = 1; }
-    | F_CONST   { $$[0] = $1; $$[1] = 2; }
-    | TRUE      { $$[0] = 1; $$[1] = 1; }
-    | FALSE     { $$[0] = 0; $$[1] = 1; }
+    : I_CONST { $$[0] = $1; $$[1] = 1; }
+    | F_CONST { $$[0] = $1; $$[1] = 2; }
+    | TRUE    { $$[0] = 1; $$[1] = 1; }
+    | FALSE   { $$[0] = 0; $$[1] = 1; }
     | ID {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
@@ -267,7 +250,6 @@ value
             }  
         }
     }
-    | function_call {$$[0] = $1[0]; $$[1] = $1[1]; }
 ;
 
 funtcion_declation
@@ -281,11 +263,6 @@ funtcion_declation
             if(function_parameter_num > 0)
                 set_function_parameter();
             clear_symbol(scope_num);
-
-            if(function_has_declare_flag == 1){
-                print_error("Redeclared function ", $1);
-            }
-            function_has_declare_flag = 0;
         }
         --scope_num;
         function_initial_flag = 0;
@@ -297,11 +274,7 @@ function_declation_part1
         if(lookup_symbol($2) == -1){
             insert_symbol($2, 2, $1);
         }
-        else {
-            function_has_declare_flag = 1;
-            
-        }
-        sprintf($$, "%s", $2);
+        //else print_error("Redeclared function ", $2);
         ++scope_num;
     }
 ;
@@ -367,7 +340,7 @@ else_stat_part1
 ;
 
 else_stat_part2
-    : stat
+    : stat SEMICOLON
     | LCB stat_list RCB
     | SEMICOLON
 ;
@@ -402,7 +375,7 @@ while_stat_part1
 
 while_stat_part2
     : SEMICOLON
-    | stat
+    | stat SEMICOLON
     | LCB stat_list RCB
 ;
 
@@ -446,10 +419,6 @@ function_call
     : ID LB function_send_parameter RB {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared function ", $1);
-        else{
-            $$[0] = 100;
-            $$[1] = get_symbol_type($1);
-        }
     }
 ;
 
@@ -460,10 +429,16 @@ function_send_parameter
 ;
 
 print_func
-    : PRINT LB value RB 
-    | PRINT LB STRING_TEXT RB 
+    : PRINT LB print_item RB 
 ;
 
+print_item
+    : ID    {
+        if(lookup_symbol($1) == -1)
+            print_error("Undeclared variable ", $1);
+    }
+    | STRING_TEXT
+;
 
 /* actions can be taken when meet the token or rule */
 type
@@ -499,26 +474,6 @@ int main(int argc, char** argv)
 
 void yyerror(char *s)
 {
-    if(strstr(s, "syntax") != NULL) syntax_error_flag = 1;
-
-    if(print_error_flag != 0){
-        if(had_print_flag == 0){
-            if(buf[0] == '\n')
-                printf("%d:%s", yylineno, buf);
-            else
-                printf("%d: %s\n", yylineno+1, buf);
-            had_print_flag = 1;
-        }
-        print_error_flag = 0;
-        printf("\n|-----------------------------------------------|\n");
-        if(syntax_error_flag == 1)
-            printf("| Error found in line %d: %s\n", yylineno+1, buf);
-        else
-            printf("| Error found in line %d: %s", yylineno, buf);
-        printf("| %s", error_buf);
-        printf("\n|-----------------------------------------------|\n\n");
-    }
-
     if(had_print_flag == 0){
         if(buf[0] == '\n')
             printf("%d:%s", yylineno, buf);
@@ -526,16 +481,13 @@ void yyerror(char *s)
             printf("%d: %s\n", yylineno+1, buf);
         had_print_flag = 1;
     }
-
+    if(strstr(s, "syntax") != NULL) syntax_error_flag = 1;
     printf("\n|-----------------------------------------------|\n");
-    if(syntax_error_flag == 1)
-        printf("| Error found in line %d: %s\n", yylineno+1, buf);
-    else 
-        printf("| Error found in line %d: %s", yylineno, buf);
+    printf("| Error found in line %d: %s\n", yylineno+1, buf);
     printf("| %s", s);
     printf("\n|-----------------------------------------------|\n\n");
 
-    //exit(-1);
+    exit(-1);
 }
 
 void create_symbol() {
@@ -725,6 +677,7 @@ float get_symbol_value(char* Name){
     }   
 }
 
+
 void clear_symbol(int scope_num){
     if(scope_num != 0){
         parse_table* temp = head;
@@ -752,19 +705,9 @@ void reset_function_array(){
     function_parameter_num = 0;
 }
 
-
-
 void print_error(char* msg, char* Name){
     sprintf(error_buf, "%s%s", msg, Name);
-    print_error_flag = 1;
-}
-
-void print_error_after_line(){
-    if(print_error_flag != 0){
-        print_error_flag = 0;
-        yyerror(error_buf);
-    }
-    print_error_flag = 0;
+    yyerror(error_buf);
 }
 
 void can_dump(int dump_scope_num){
