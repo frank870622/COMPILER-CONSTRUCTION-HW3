@@ -54,7 +54,6 @@ char error_buf[128];
 int had_print_flag = 0;
 int dump_scope_flag = -1;
 int syntax_error_flag = 0;
-int variable_type_flag = 0;     //1:int 2:float
 void reset_function_array();
 void print_error(char*, char*);
 void can_dump(int);
@@ -69,6 +68,7 @@ void can_dump(int);
     int i_val;
     double f_val;
     char* string;
+    float variable_pack[2];   //0: value  1:
 }
 
 /* Token without return */
@@ -104,12 +104,12 @@ void can_dump(int);
 
 /* Nonterminal with return, which need to sepcify type */
 %type <i_val> type
-%type <f_val> value
-%type <f_val> value_stat
-%type <f_val> lv3_arithmetic_stat
-%type <f_val> lv2_arithmetic_stat
-%type <f_val> arithmetic_stat
-%type <f_val> initializer
+%type <variable_pack> value
+%type <variable_pack> value_stat
+%type <variable_pack> lv3_arithmetic_stat
+%type <variable_pack> lv2_arithmetic_stat
+%type <variable_pack> arithmetic_stat
+%type <variable_pack> initializer
 
 /* Yacc will start at this nonterminal */
 %start program
@@ -148,7 +148,7 @@ declaration
         if(lookup_symbol($1) != 0){
             insert_symbol($1, 1, -1);
             ++variable_declare_count;
-            set_symbol_value($1, $3);
+            set_symbol_value($1, $3[0]);
         }
         else    print_error("Redeclared variable ", $1);
     }
@@ -164,7 +164,7 @@ declaration
         if(lookup_symbol($1) != 0){
             insert_symbol($1, 1, -1);
             ++variable_declare_count;
-            set_symbol_value($1, $3);
+            set_symbol_value($1, $3[0]);
         }
         else    print_error("Redeclared variable ", $1);
     }
@@ -179,74 +179,75 @@ declaration
 ;
 
 initializer
-    : arithmetic_stat { $$ = $1; variable_type_flag = 0;}
+    : arithmetic_stat { $$[0] = $1[0]; $$[1] = $1[1]; }
 ;
 
 arithmetic_stat
-    : lv2_arithmetic_stat ADD arithmetic_stat { $$ = $1 + $3; }
-    | lv2_arithmetic_stat SUB arithmetic_stat { $$ = $1 - $3; }
-    | lv2_arithmetic_stat   { $$ = $1; }
-    | LB arithmetic_stat RB { $$ = $2; }
+    : lv2_arithmetic_stat ADD arithmetic_stat { $$[0] = $1[0] + $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
+    | lv2_arithmetic_stat SUB arithmetic_stat { $$[0] = $1[0] - $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
+    | lv2_arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | LB arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
 
 lv2_arithmetic_stat
-    : lv3_arithmetic_stat MUL lv2_arithmetic_stat   { $$ = $1 * $3; }
+    : lv3_arithmetic_stat MUL lv2_arithmetic_stat   { $$[0] = $1[0] * $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
     | lv3_arithmetic_stat DIV lv2_arithmetic_stat   
     { 
-        printf("the value of diver %f\n", $3);
-        if($3 == 0) {
+        //printf("the value of diver %f\n", $3);
+        if($3[0] == 0) {
             yyerror("Divided by Zero");
         }
-        $$ = $1 / $3; 
+        $$[0] = $1[0] / $3[0]; 
+        $$[1] = ($1[1]==2 || $3[1]==2)? 2:1;
     }
     | lv3_arithmetic_stat MOD lv2_arithmetic_stat   
     { 
-        if (variable_type_flag != 1)
+        if ($1[1] != 1 || $3[1] != 1)
             yyerror("invalid operands to binary %");
-        if($3 == 0) {
+        if($3[0] == 0) {
             yyerror("Mod by Zero");
         }
-        $$ = (int)$1 % (int)$3; 
+        $$[0] = (int)$1[0] % (int)$3[0]; 
+        $$[1] = 1;
     }
-    | lv3_arithmetic_stat   { $$ = $1; }
-    | LB lv2_arithmetic_stat RB { $$ = $2; }
+    | lv3_arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | LB lv2_arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
 
 lv3_arithmetic_stat
-    : INC lv3_arithmetic_stat { $$ = $2 + 1; }
-    | DEC lv3_arithmetic_stat { $$ = $2 + 1; }
-    | lv3_arithmetic_stat INC { $$ = $1; }
-    | lv3_arithmetic_stat DEC { $$ = $1; }
-    | value_stat { $$ = $1; }
-    | LB lv3_arithmetic_stat RB { $$ = $2; }
+    : INC lv3_arithmetic_stat { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
+    | DEC lv3_arithmetic_stat { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
+    | lv3_arithmetic_stat INC { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | lv3_arithmetic_stat DEC { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | value_stat { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | LB lv3_arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
 
 value_stat
-    : ADD value_stat { $$ = $2 * 1; }
-    | SUB value_stat { $$ = $2 * -1; }
+    : ADD value_stat { $$[0] = $2[0] * 1; $$[1] = $2[1]; }
+    | SUB value_stat { $$[0] = $2[0] * -1; $$[1] = $2[1]; }
     | STRING_TEXT   { }
-    | value { $$ = $1; }
-    | LB value_stat RB  { $$ = $2; }
+    | value { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | LB value_stat RB  { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
 
 value
-    : I_CONST { $$ = $1; if(variable_type_flag != 2) variable_type_flag = 1;}
-    | F_CONST { $$ = $1; variable_type_flag = 2; }
-    | TRUE    { $$ = 1; if(variable_type_flag != 2) variable_type_flag = 1; }
-    | FALSE   { $$ = 0; if(variable_type_flag != 2) variable_type_flag = 1; }
+    : I_CONST { $$[0] = $1; $$[1] = 1; }
+    | F_CONST { $$[0] = $1; $$[1] = 2; }
+    | TRUE    { $$[0] = 1; $$[1] = 1; }
+    | FALSE   { $$[0] = 0; $$[1] = 1; }
     | ID {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
         else{
             if(get_symbol_type($1) == 1){
-                if(variable_type_flag != 2) variable_type_flag = 1;
-                $$ = (int)get_symbol_value($1);
+                $$[0] = get_symbol_value($1);
+                $$[1] = 1;
             }  
             else{
-                $$ = get_symbol_value($1);
-                variable_type_flag = 2;
-            }
-             
+                $$[0] = get_symbol_value($1);
+                $$[1] = 2;
+            }  
         }
     }
 ;
