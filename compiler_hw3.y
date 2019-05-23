@@ -285,8 +285,8 @@ funtcion_declation
             if(function_has_declare_flag == 1){
                 print_error("Redeclared function ", $1);
             }
-            function_has_declare_flag = 0;
         }
+        function_has_declare_flag = 0;
         --scope_num;
         function_initial_flag = 0;
     }
