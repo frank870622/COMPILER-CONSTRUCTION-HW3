@@ -519,7 +519,7 @@ void yyerror(char *s)
         printf("\n|-----------------------------------------------|\n\n");
     }
 
-    if(had_print_flag == 0){
+    if(had_print_flag == 0 && syntax_error_flag == 1){
         if(buf[0] == '\n')
             printf("%d:%s", yylineno, buf);
         else
