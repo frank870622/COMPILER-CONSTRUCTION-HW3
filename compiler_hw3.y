@@ -19,10 +19,12 @@ void insert_symbol(char*, int, int);
 void dump_symbol(int);
 void set_symbol_type();
 void set_symbol_value(char*, float);
-void set_function_parameter();
+void set_function_parameter(char*);
 int get_symbol_type(char*);
 float get_symbol_value(char*);
 void clear_symbol(int);
+int check_fun_error_initail(char*);
+int check_fun_call_error(char*);
 
 typedef struct parse_table{
     //from 0~
@@ -37,7 +39,7 @@ typedef struct parse_table{
     // 1:int 2:float 3:bool 4:string 5:void
     int* attribute;
     float variable_value;
-    int function_declartions;
+    int parameter_num;
     struct parse_table* next;
     struct parse_table* back;
 }parse_table;
@@ -47,17 +49,21 @@ parse_table *head;
 int scope_num = 0;
 int index_num = 0;
 int function_parameter_num = 0;
+int function_call_parameter_num = 0;
 int variable_declare_count = 0;
 int function_initial_flag = 0;
 int function_has_declare_flag = 0;
 int function_parameter_array[512];
-char error_buf[128];
+int function_call_parameter_array[512];
+char error_buf[256];
 int had_print_flag = 0;
 int dump_scope_flag = -1;
 int syntax_error_flag = 0;
 int print_error_flag = 0;
+char now_in_function_name[128];
 
 void reset_function_array();
+void reset_function_call_array();
 void print_error(char*, char*);
 void can_dump(int);
 
@@ -108,6 +114,7 @@ void can_dump(int);
 
 /* Nonterminal with return, which need to sepcify type */
 %type <i_val> type
+%type <i_val> logical_operation
 %type <char_array> function_declation_part1
 %type <variable_pack> value
 %type <variable_pack> value_stat
@@ -116,7 +123,8 @@ void can_dump(int);
 %type <variable_pack> arithmetic_stat
 %type <variable_pack> initializer
 %type <variable_pack> function_call
-
+%type <variable_pack> logical_stats
+%type <variable_pack> logical_stat
 
 /* Yacc will start at this nonterminal */
 %start program
@@ -243,7 +251,7 @@ lv3_arithmetic_stat
 value_stat
     : ADD value_stat    { $$[0] = $2[0] * 1; $$[1] = $2[1]; }
     | SUB value_stat    { $$[0] = $2[0] * -1; $$[1] = $2[1]; }
-    | STRING_TEXT   { }
+    | STRING_TEXT   { $$[1] = 4; }
     | value { $$[0] = $1[0]; $$[1] = $1[1]; }
     | LB value_stat RB  { $$[0] = $2[0]; $$[1] = $2[1]; }
 ;
@@ -251,8 +259,8 @@ value_stat
 value
     : I_CONST   { $$[0] = $1; $$[1] = 1; }
     | F_CONST   { $$[0] = $1; $$[1] = 2; }
-    | TRUE      { $$[0] = 1; $$[1] = 1; }
-    | FALSE     { $$[0] = 0; $$[1] = 1; }
+    | TRUE      { $$[0] = 1; $$[1] = 3; }
+    | FALSE     { $$[0] = 0; $$[1] = 3; }
     | ID {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
@@ -273,13 +281,17 @@ value
 funtcion_declation
     : function_declation_part1 function_declation_part2 {
         if(function_initial_flag == 1){
+            if(function_has_declare_flag == 1){
+                if(check_fun_error_initail($1) == -1)
+                    print_error("Different in function declare ", $1);
+            }
             if(function_parameter_num > 0)
-                set_function_parameter();
+                set_function_parameter($1);
             can_dump(scope_num);
         }
         else if(function_initial_flag == 0){
             if(function_parameter_num > 0)
-                set_function_parameter();
+                set_function_parameter($1);
             clear_symbol(scope_num);
 
             if(function_has_declare_flag == 1){
@@ -302,6 +314,7 @@ function_declation_part1
             
         }
         sprintf($$, "%s", $2);
+        sprintf(now_in_function_name, "%s", $2);
         ++scope_num;
     }
 ;
@@ -310,7 +323,11 @@ function_declation_part2
     : function_parameter RB SEMICOLON   {function_initial_flag = 0;}
     | RB SEMICOLON  {function_initial_flag = 0;}
     | function_parameter RB LCB stat_list RCB   {function_initial_flag = 1;}
-    | RB LCB stat_list RCB  {function_initial_flag = 1;}
+    | RB LCB stat_list RCB  
+    {
+        function_initial_flag = 1;
+        function_parameter_num = 0;
+    }
 ;
 
 function_parameter
@@ -374,22 +391,63 @@ else_stat_part2
 
 logical_stats
     : logical_stats logical_operation logical_stat
-    | logical_stat
+    {
+        if($2 == 1){
+            if($1[0] && $3[0])  $$[0] = 1;
+            else                $$[0] = 0;
+        }
+        else if($2 == 2){
+            if($1[0] || $3[0])  $$[0] = 1;
+            else                $$[0] = 0;
+        }
+        $$[1] = 1;
+    }
+    | logical_stat  { $$[0] = $1[0]; $$[1] = $1[1]; }
 ;
 
 logical_stat
-    : value_stat MT value_stat
-    | value_stat LT value_stat
-    | value_stat MTE value_stat
-    | value_stat LTE value_stat
-    | value_stat EQ value_stat
-    | value_stat NE value_stat
-    | value_stat
+    : arithmetic_stat MT arithmetic_stat
+    {
+        if($1[0] > $3[0])   $$[0] = 1;
+        else                $$[0] = 0;
+        $$[1] = 1;
+    }
+    | arithmetic_stat LT arithmetic_stat
+    {
+        if($1[0] < $3[0])   $$[0] = 1;
+        else                $$[0] = 0;
+        $$[1] = 1;
+    }
+    | arithmetic_stat MTE arithmetic_stat
+    {
+        if($1[0] >= $3[0])  $$[0] = 1;
+        else                $$[0] = 0;
+        $$[1] = 1;
+    }
+    | arithmetic_stat LTE arithmetic_stat
+    {
+        if($1[0] <= $3[0])  $$[0] = 1;
+        else                $$[0] = 0;
+        $$[1] = 1;
+    }
+    | arithmetic_stat EQ arithmetic_stat
+    {
+        if($1[0] == $3[0])  $$[0] = 1;
+        else                $$[0] = 0;
+        $$[1] = 1;
+    }
+    | arithmetic_stat NE arithmetic_stat
+    {
+        if($1[0] != $3[0])  $$[0] = 1;
+        else                $$[0] = 0;
+        $$[1] = 1;
+    }
+    | arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
 ;
 
 logical_operation
-    : AND
-    | OR
+    : AND   { $$ = 1; }
+    | OR    { $$ = 2; }
 ;
 
 while_stat
@@ -410,7 +468,17 @@ expression_stat
     : assignment_stat SEMICOLON
     | function_call SEMICOLON
     | RETURN arithmetic_stat SEMICOLON
+    {
+        if(get_symbol_type(now_in_function_name) != $2[1]){
+            print_error("Return type error ", now_in_function_name);
+        }
+    }
     | RETURN SEMICOLON
+    {
+        if(get_symbol_type(now_in_function_name) != 5){
+            print_error("Return type error ", now_in_function_name);
+        }
+    }
 ;
 
 assignment_stat
@@ -449,14 +517,25 @@ function_call
         else{
             $$[0] = 100;
             $$[1] = get_symbol_type($1);
+
+            if(check_fun_call_error($1) == -1){
+                print_error("Function call parameter error ", $1);
+            }
         }
     }
 ;
 
 function_send_parameter
-    : function_send_parameter COMMA arithmetic_stat
-    | arithmetic_stat
+    : function_send_parameter COMMA logical_stats
+    {
+        function_call_parameter_array[function_call_parameter_num] = $3[1];
+        ++function_call_parameter_num;
+    }
     | logical_stats
+    {
+        function_call_parameter_array[function_call_parameter_num] = $1[1];
+        ++function_call_parameter_num;
+    }
 ;
 
 print_func
@@ -631,7 +710,7 @@ void dump_symbol(int dump_scope_num) {
                 else if(temp->attribute[0] == 3)    printf("bool");
                 else if(temp->attribute[0] == 4)    printf("string");
                 else if(temp->attribute[0] == 5)    printf("void");
-                for(int i=1; i< sizeof(temp->attribute)/sizeof(temp->attribute[0]); ++i){
+                for(int i=1; i< temp->parameter_num; ++i){
                     if(temp->attribute[i] == 1)         printf(", int");
                     else if(temp->attribute[i] == 2)    printf(", float");
                     else if(temp->attribute[i] == 3)    printf(", bool");
@@ -647,15 +726,66 @@ void dump_symbol(int dump_scope_num) {
     clear_symbol(dump_scope_num);
 }
 
-void set_function_parameter(){
+void set_function_parameter(char* Name){
     parse_table *temp = head;
-    while(temp -> next != NULL)     temp = temp -> next;
-    while(temp->kind != 2)  temp = temp -> back;
-    temp->attribute = (int*)malloc(sizeof(int)*function_parameter_num);
-    for(int i=0; i<function_parameter_num; ++i){
-        temp->attribute[i] = function_parameter_array[i];
-    }
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0){
+            temp->attribute = (int*)malloc(sizeof(int)*function_parameter_num);
+            temp->parameter_num = function_parameter_num;
+            for(int i=0; i<function_parameter_num; ++i){
+                temp->attribute[i] = function_parameter_array[i];
+            }
+            reset_function_array();
+            return;
+        }
+    }  
     reset_function_array();
+    return;
+}
+
+int check_fun_error_initail(char* Name){
+    parse_table *temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0){
+            if(temp->parameter_num != function_parameter_num){
+                reset_function_array();
+                return -1;      //mean error occur
+            }
+            for(int i=0; i<temp->parameter_num; ++i){
+                if(temp->attribute[i] != function_parameter_array[i]){
+                    reset_function_array();
+                    return -1;      //mean error occur
+                }
+            }
+            return 0;
+        }
+    } 
+    return 0; 
+}
+
+int check_fun_call_error(char* Name){
+    parse_table *temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0){
+            if(temp->parameter_num != function_call_parameter_num){
+                reset_function_call_array();
+                return -1;      //mean error occur
+            }
+            for(int i=0; i<temp->parameter_num; ++i){
+                if(temp->attribute[i] != function_call_parameter_array[i]){
+                    reset_function_call_array();
+                    return -1;      //mean error occur
+                }
+            }
+            reset_function_call_array();
+            return 0;
+        }
+    } 
+    reset_function_call_array();
+    return 0; 
 }
 
 void set_symbol_type(int Type){
@@ -752,7 +882,11 @@ void reset_function_array(){
     function_parameter_num = 0;
 }
 
-
+void reset_function_call_array(){
+    for(int i=0; i<512; ++i)
+        function_call_parameter_array[i] = -1;
+    function_call_parameter_num = 0;
+}
 
 void print_error(char* msg, char* Name){
     sprintf(error_buf, "%s%s", msg, Name);
