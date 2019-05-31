@@ -22,9 +22,13 @@ void set_symbol_value(char*, float);
 void set_function_parameter(char*);
 int get_symbol_type(char*);
 float get_symbol_value(char*);
+int get_symbol_index(char*);
+
 void clear_symbol(int);
 int check_fun_error_initail(char*);
 int check_fun_call_error(char*);
+int find_stack_num_of_local_var(char*);
+int check_global_variable(char*);
 
 typedef struct parse_table{
     //from 0~
@@ -61,13 +65,28 @@ int dump_scope_flag = -1;
 int syntax_error_flag = 0;
 int print_error_flag = 0;
 char now_in_function_name[128];
+char get_string_text_buf[128];
+
+parse_table* get_symbol_by_index(int);
+
+
+int file_delete_flag = 0;
+
+FILE *file; // To generate .j file for Jasmin
 
 void reset_function_array();
 void reset_function_call_array();
 void print_error(char*, char*);
 void can_dump(int);
 
-
+/* code generation functions, just an example! */
+void gencode_function();
+void gencode_positive(float*);
+void gencode_negative(float*);
+void gencode_string_text(char*);
+void gencode_INC_DEC(float*, int); //int == 0->INC, int == 1->DEC
+void gencode_ADD_SUB_MUL_DIV_MOD(float*, float*, int);   //int == 0->ADD, == 1->SUB, == 2->MUL, == 3->DIV, == 4->MOD
+void gencode_variable_define(float*);
 %}
 
 /* Use variable or self-defined structure to represent
@@ -78,7 +97,7 @@ void can_dump(int);
     double f_val;
     char* string;
     char char_array[50];
-    float variable_pack[2];   //0: value  1:
+    float variable_pack[6];   //0: value  1:type 2:has been load 3: load from id? 4: if(3) stack num(if global->index) 5:global
 }
 
 /* Token without return */
@@ -114,7 +133,6 @@ void can_dump(int);
 
 /* Nonterminal with return, which need to sepcify type */
 %type <i_val> type
-%type <i_val> logical_operation
 %type <char_array> function_declation_part1
 %type <variable_pack> value
 %type <variable_pack> value_stat
@@ -148,64 +166,198 @@ stat_list
 ;
 
 stat
-    : declaration_stat
+    : declaration
     | compound_stat
     | expression_stat
     | print_func SEMICOLON
 ;
 
-declaration_stat
-    : type declaration SEMICOLON    {set_symbol_type($1);}
-;
-
 declaration
-    : ID ASGN initializer   {
-        if(lookup_symbol($1) != 0){
-            insert_symbol($1, 1, -1);
+    : type ID ASGN initializer SEMICOLON {
+        if(lookup_symbol($2) != 0){
+            insert_symbol($2, 1, -1);
             ++variable_declare_count;
-            set_symbol_value($1, $3[0]);
+            set_symbol_value($2, $4[0]);
+            set_symbol_type($1);
+
+            if(scope_num == 0){
+                gencode_function(".field public static ");
+                gencode_function($2);
+                gencode_function(" ");
+                char tempbuf[32];
+                if ($1 == 1){
+                    gencode_function("I = ");
+                    sprintf(tempbuf, "%d\n", (int)$4[0]);
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 2){
+                    gencode_function("F = ");
+                    sprintf(tempbuf, "%f\n", (float)$4[0]);
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 3){
+                    gencode_function("Z = ");
+                    sprintf(tempbuf, "%d\n", (int)$4[0]);
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 4){
+                    gencode_function("S = ");
+                    gencode_function(get_string_text_buf);
+                    gencode_function("\n");
+                }
+                else if ($1 == 5){
+                    gencode_function("V = ");
+                    sprintf(tempbuf, "%f\n", (float)$4[0]);
+                    gencode_function(tempbuf);
+                }
+            }
+            else if(scope_num > 0){
+                char tempbuf[32];
+                gencode_variable_define($4);
+                if($1 == 1 && $4[1] == 2)
+                    gencode_function("f2i\n");
+                else if($1 == 2 && $4[1] == 1)
+                    gencode_function("i2f\n");
+
+                if ($1 == 1){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 2){
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 3){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+            }
         }
-        else    print_error("Redeclared variable ", $1);
+        else    print_error("Redeclared variable ", $2);
     }
-    | ID    {
-        if(lookup_symbol($1) != 0){
-            insert_symbol($1, 1, -1);
+    | type ID SEMICOLON  {
+        if(lookup_symbol($2) != 0){
+            insert_symbol($2, 1, -1);
             ++variable_declare_count;
-            set_symbol_value($1, 0);
+            set_symbol_value($2, 0);
+            set_symbol_type($1);
+
+            if(scope_num == 0){
+                gencode_function(".field public static ");
+                gencode_function($2);
+                gencode_function(" ");
+                char tempbuf[32];
+                if ($1 == 1){
+                    gencode_function("I\n");
+                }
+                else if ($1 == 2){
+                    gencode_function("F\n");
+                }
+                else if ($1 == 3){
+                    gencode_function("Z\n");
+                }
+                else if ($1 == 4){
+                    gencode_function("S\n");
+                }
+                else if ($1 == 5){
+                    gencode_function("V\n");
+                }
+            }
+            else if(scope_num > 0){
+                char tempbuf[32];
+                if ($1 == 1){
+                    gencode_function("ldc 0\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 2){
+                    gencode_function("ldc 0\n");
+                    gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 3){
+                    gencode_function("ldc 0\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 4){
+                    gencode_function("ldc ""\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+                else if ($1 == 5){
+                    gencode_function("ldc 0\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
+                    gencode_function(tempbuf);
+                }
+            }
         }
-        else    print_error("Redeclared variable ", $1);
-    }
-    | ID ASGN initializer COMMA declaration {
-        if(lookup_symbol($1) != 0){
-            insert_symbol($1, 1, -1);
-            ++variable_declare_count;
-            set_symbol_value($1, $3[0]);
-        }
-        else    print_error("Redeclared variable ", $1);
-    }
-    | ID COMMA declaration {
-        if(lookup_symbol($1) != 0){
-            insert_symbol($1, 1, -1);
-            ++variable_declare_count;
-            set_symbol_value($1, 0);
-        }
-        else    print_error("Redeclared variable ", $1);
+        else    print_error("Redeclared variable ", $2);
     }
 ;
 
 initializer
-    : arithmetic_stat { $$[0] = $1[0]; $$[1] = $1[1]; }
+    : arithmetic_stat { 
+        $$[0] = $1[0];  $$[1] = $1[1]; 
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
 ;
 
 arithmetic_stat
-    : lv2_arithmetic_stat ADD arithmetic_stat { $$[0] = $1[0] + $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
-    | lv2_arithmetic_stat SUB arithmetic_stat { $$[0] = $1[0] - $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
-    | lv2_arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | LB arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
+    : lv2_arithmetic_stat ADD arithmetic_stat { 
+        $$[0] = $1[0] + $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; 
+        $$[2] = 1;  $$[3] = -1;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_ADD_SUB_MUL_DIV_MOD($1, $3, 0);
+    }
+    | lv2_arithmetic_stat SUB arithmetic_stat { 
+        $$[0] = $1[0] - $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; 
+        $$[2] = 1;  $$[3] = -1;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_ADD_SUB_MUL_DIV_MOD($1, $3, 1);
+    }
+    | lv2_arithmetic_stat   { 
+        $$[0] = $1[0];  $$[1] = $1[1]; 
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
+    | LB arithmetic_stat RB { 
+        $$[0] = $2[0];  $$[1] = $2[1];
+        $$[2] = $2[2];  $$[3] = $2[3];
+        $$[4] = $2[4];  $$[5] = $2[5];
+    }
 ;
 
 lv2_arithmetic_stat
-    : lv3_arithmetic_stat MUL lv2_arithmetic_stat { $$[0] = $1[0] * $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; }
+    : lv3_arithmetic_stat MUL lv2_arithmetic_stat { 
+        $$[0] = $1[0] * $3[0]; $$[1] = ($1[1]==2 || $3[1]==2)? 2:1; 
+        $$[2] = 1;  $$[3] = -1;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_ADD_SUB_MUL_DIV_MOD($1, $3, 2);
+    }
     | lv3_arithmetic_stat DIV lv2_arithmetic_stat 
     { 
         //printf("the value of diver %f\n", $3);
@@ -217,6 +369,10 @@ lv2_arithmetic_stat
             $$[0] = $1[0] / $3[0]; 
         }
         $$[1] = ($1[1]==2 || $3[1]==2)? 2:1;
+        $$[2] = 1;  $$[3] = -1;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_ADD_SUB_MUL_DIV_MOD($1, $3, 3);
     }
     | lv3_arithmetic_stat MOD lv2_arithmetic_stat
     { 
@@ -232,47 +388,145 @@ lv2_arithmetic_stat
             $$[0] = (int)$1[0] % (int)$3[0]; 
         }
         $$[1] = 1;
+        $$[2] = 1;  $$[3] = -1;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_ADD_SUB_MUL_DIV_MOD($1, $3, 4);
     }
-    | lv3_arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | LB lv2_arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
+    | lv3_arithmetic_stat   { 
+        $$[0] = $1[0];  $$[1] = $1[1]; 
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
+    | LB lv2_arithmetic_stat RB { 
+        $$[0] = $2[0];  $$[1] = $2[1]; 
+        $$[2] = $2[2];  $$[3] = $2[3];
+        $$[4] = $2[4];  $$[5] = $2[5];
+    }
 ;
 
 lv3_arithmetic_stat
-    : INC lv3_arithmetic_stat   { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
-    | DEC lv3_arithmetic_stat   { $$[0] = $2[0] + 1; $$[1] = $2[1]; }
-    | lv3_arithmetic_stat INC   { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | lv3_arithmetic_stat DEC   { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | value_stat                { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | LB lv3_arithmetic_stat RB { $$[0] = $2[0]; $$[1] = $2[1]; }
+    : INC lv3_arithmetic_stat   { 
+        $$[0] = $2[0] + 1;  $$[1] = $2[1];
+        $$[2] = 1;          $$[3] = $2[3];
+        $$[4] = $2[4];      $$[5] = $2[5];
+        gencode_INC_DEC($2, 0);
+    }
+    | DEC lv3_arithmetic_stat   { 
+        $$[0] = $2[0] + 1;  $$[1] = $2[1]; 
+        $$[2] = 1;          $$[3] = $2[3];
+        $$[4] = $2[4];      $$[5] = $2[5];
+        gencode_INC_DEC($2, 1);
+    }
+    | lv3_arithmetic_stat INC   { 
+        $$[0] = $1[0];      $$[1] = $1[1]; 
+        $$[2] = 1;          $$[3] = $1[3];
+        $$[4] = $1[4];      $$[5] = $1[5];
+        gencode_INC_DEC($1, 0);
+    }
+    | lv3_arithmetic_stat DEC   { 
+        $$[0] = $1[0]; $$[1] = $1[1];
+        $$[2] = 1;          $$[3] = $1[3];
+        $$[4] = $1[4];      $$[5] = $1[5];
+        gencode_INC_DEC($1, 1);
+    }
+    | value_stat    { 
+        $$[0] = $1[0];  $$[1] = $1[1];
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
+    | LB lv3_arithmetic_stat RB { 
+        $$[0] = $2[0];  $$[1] = $2[1]; 
+        $$[2] = $2[2];  $$[3] = $2[3];
+        $$[4] = $2[4];  $$[5] = $2[5];
+    }
 ;
 
 
 
 value_stat
-    : ADD value_stat    { $$[0] = $2[0] * 1; $$[1] = $2[1]; }
-    | SUB value_stat    { $$[0] = $2[0] * -1; $$[1] = $2[1]; }
-    | STRING_TEXT   { $$[1] = 4; }
-    | value { $$[0] = $1[0]; $$[1] = $1[1]; }
-    | LB value_stat RB  { $$[0] = $2[0]; $$[1] = $2[1]; }
+    : ADD value_stat    { 
+        $$[0] = $2[0] * 1;  $$[1] = $2[1];
+        $$[2] = 1;          $$[3] = $2[3];
+        $$[4] = $2[4];      $$[5] = $2[5];
+        gencode_positive($2);
+    }
+    | SUB value_stat    { 
+        $$[0] = $2[0] * -1; $$[1] = $2[1]; 
+        $$[2] = 1;          $$[3] = $2[3];
+        $$[4] = $2[4];      $$[5] = $2[5];
+        gencode_negative($2);
+    }
+    | STRING_TEXT   { 
+        $$[0] = -1; $$[1] = 4; 
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = 0;
+        gencode_string_text($1);
+        sprintf(get_string_text_buf, "%s", $1);
+    }
+    | value { 
+        $$[0] = $1[0];  $$[1] = $1[1];
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
+    | LB value_stat RB  { 
+        $$[0] = $2[0];  $$[1] = $2[1];
+        $$[2] = $2[2];  $$[3] = $2[3];
+        $$[4] = $2[4];  $$[5] = $2[5];
+    }
 ;
 
 value
-    : I_CONST   { $$[0] = $1; $$[1] = 1; }
-    | F_CONST   { $$[0] = $1; $$[1] = 2; }
-    | TRUE      { $$[0] = 1; $$[1] = 3; }
-    | FALSE     { $$[0] = 0; $$[1] = 3; }
+    : I_CONST   {
+        $$[0] = $1; $$[1] = 1;
+        $$[2] = 0;  $$[3] = 0;
+        $$[4] = -1; $$[5] = 0;
+    }
+    | F_CONST   { 
+        $$[0] = $1; $$[1] = 2;
+        $$[2] = 0;  $$[3] = 0;
+        $$[4] = -1; $$[5] = 0;
+    }
+    | TRUE      { 
+        $$[0] = 1;  $$[1] = 3;
+        $$[2] = 0;  $$[3] = 0;
+        $$[4] = -1; $$[5] = 0;
+    }
+    | FALSE     { 
+        $$[0] = 0;  $$[1] = 3; 
+        $$[2] = 0;  $$[3] = 0;
+        $$[4] = -1; $$[5] = 0;
+    }
     | ID {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
         else{
-            if(get_symbol_type($1) == 1){
-                $$[0] = get_symbol_value($1);
-                $$[1] = 1;
-            }  
+            if(get_symbol_type($1) == 4){
+                $$[0] = -1;
+                $$[1] = 4;
+                $$[2] = 1;  $$[3] = 1;
+                $$[4] = -1;
+                char tempbuf[32];
+
+                if(check_global_variable($1)){
+                    gencode_function("getstatic compiler_hw3/");
+                    gencode_function($1);
+                    gencode_function(" S\n");
+                }
+                else{
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+            }
             else{
                 $$[0] = get_symbol_value($1);
-                $$[1] = 2;
-            }  
+                $$[1] = get_symbol_type($1);
+                $$[2] = 0;  $$[3] = 1;
+                $$[4] = find_stack_num_of_local_var($1);
+            }
+            $$[5] = check_global_variable($1);
+            if(check_global_variable($1))   $$[4] = get_symbol_index($1);
         }
     }
     | function_call {$$[0] = $1[0]; $$[1] = $1[1]; }
@@ -283,7 +537,7 @@ funtcion_declation
         if(function_initial_flag == 1){
             if(function_has_declare_flag == 1){
                 if(check_fun_error_initail($1) == -1)
-                    print_error("Different in function declare ", $1);
+                    print_error("function formal parameter is not the same ", $1);
             }
             if(function_parameter_num > 0)
                 set_function_parameter($1);
@@ -390,19 +644,7 @@ else_stat_part2
 ;
 
 logical_stats
-    : logical_stats logical_operation logical_stat
-    {
-        if($2 == 1){
-            if($1[0] && $3[0])  $$[0] = 1;
-            else                $$[0] = 0;
-        }
-        else if($2 == 2){
-            if($1[0] || $3[0])  $$[0] = 1;
-            else                $$[0] = 0;
-        }
-        $$[1] = 1;
-    }
-    | logical_stat  { $$[0] = $1[0]; $$[1] = $1[1]; }
+    : logical_stat  { $$[0] = $1[0]; $$[1] = $1[1]; }
 ;
 
 logical_stat
@@ -445,11 +687,6 @@ logical_stat
     | arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
 ;
 
-logical_operation
-    : AND   { $$ = 1; }
-    | OR    { $$ = 2; }
-;
-
 while_stat
     : while_stat_part1 while_stat_part2 {can_dump(scope_num); --scope_num;}
 ;
@@ -470,13 +707,13 @@ expression_stat
     | RETURN arithmetic_stat SEMICOLON
     {
         if(get_symbol_type(now_in_function_name) != $2[1]){
-            print_error("Return type error ", now_in_function_name);
+            print_error("function return type is not the same ", now_in_function_name);
         }
     }
     | RETURN SEMICOLON
     {
         if(get_symbol_type(now_in_function_name) != 5){
-            print_error("Return type error ", now_in_function_name);
+            print_error("function return type is not the same ", now_in_function_name);
         }
     }
 ;
@@ -561,17 +798,35 @@ int main(int argc, char** argv)
     yylineno = 0;
     create_symbol();
     reset_function_array();
+    reset_function_call_array();
+
+    file = fopen("compiler_hw3.j","w");
+
+    gencode_function(".class public compiler_hw3\n"
+                    ".super java/lang/Object\n"
+                    ".method public static main([Ljava/lang/String;)V\n");
 
     yyparse();
     if(syntax_error_flag == 0){
+
         if(buf[0] != '\0'){
             printf("%d: %s\n", yylineno+1, buf);
             ++yylineno;
+        }
+
+        if(dump_scope_flag >= 0){
+            dump_symbol(dump_scope_flag);
+            dump_scope_flag = -1;
         }
             
         dump_symbol(scope_num);
         printf("\nTotal lines: %d \n",yylineno);
     }
+
+    gencode_function("\treturn\n"
+                  ".end method\n");
+    if(syntax_error_flag == 0)
+        fclose(file);
 
     return 0;
 }
@@ -614,7 +869,11 @@ void yyerror(char *s)
     printf("| %s", s);
     printf("\n|-----------------------------------------------|\n\n");
 
-    //exit(-1);
+    fclose(file);
+    remove("compiler_hw3.j");
+    file_delete_flag = 1;
+    if(syntax_error_flag == 1) exit(-1);
+    
 }
 
 void create_symbol() {
@@ -640,10 +899,12 @@ void insert_symbol(char* Name, int Kind, int Type) {
 
     temp->index = index_num;
     temp->name = (char*)malloc(sizeof(char)*strlen(Name)+1);
-    strncpy(temp->name, Name, strlen(Name));
+    //strncpy(temp->name, Name, strlen(Name));
+    sprintf(temp->name, "%s", Name);
     temp->kind = Kind;
     temp->type = Type;
     temp->scope = scope_num;
+    temp->attribute = NULL;
 
     /*
     if(function_parameter_num > 0){
@@ -686,7 +947,7 @@ void dump_symbol(int dump_scope_num) {
            "Index", "Name", "Kind", "Type", "Scope", "Attribute");
     parse_table* temp = head;
     while(temp->next != NULL)
-    {
+    {   
         temp = temp->next;
         if(temp->scope == dump_scope_num){
             printf("%-10d", index_count);
@@ -718,6 +979,7 @@ void dump_symbol(int dump_scope_num) {
                     else if(temp->attribute[i] == 5)    printf(", void");
                 }
             }
+
             printf("\n");
             index_count++;
         }
@@ -844,7 +1106,6 @@ float get_symbol_value(char* Name){
         if(strcmp(temp->name, Name) == 0 && temp->scope == scope_num){
             return temp->variable_value;
         }
-
     }   
     temp = head;
     while(temp->next != NULL){
@@ -853,6 +1114,59 @@ float get_symbol_value(char* Name){
              return temp->variable_value;
         }
     }   
+}
+
+int get_symbol_index(char* Name){
+    parse_table* temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0 && temp->scope == scope_num){
+            return temp->index;
+        }
+    }   
+    temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0 && temp->scope < scope_num){
+             return temp->index;
+        }
+    }  
+}
+
+int find_stack_num_of_local_var(char* Name){
+    int return_num = 0;
+    parse_table* temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0 && temp->scope <= scope_num && temp->scope > 0){
+            return return_num;
+        }
+        if(temp->scope <= scope_num && temp->scope > 0){
+            ++return_num;
+        }
+    }   
+    return -1;
+}
+
+parse_table* get_symbol_by_index(int INDEX){
+    parse_table* temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(temp->index == INDEX){
+            return temp;
+        }
+    }   
+}
+
+int check_global_variable(char* Name){
+    parse_table* temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0 && temp->scope == 0){
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void clear_symbol(int scope_num){
@@ -903,4 +1217,414 @@ void print_error_after_line(){
 
 void can_dump(int dump_scope_num){
     dump_scope_flag = dump_scope_num;
+}
+
+void gencode_function(char* output_text){
+    if(file_delete_flag == 0){
+            fprintf(file, output_text);
+    }
+}
+
+void gencode_positive(float* var1){
+    if(var1[2] == 0){
+        if(var1[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var1[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var1[0]);
+                gencode_function(tempbuf);
+                gencode_function("ldc 1\n");
+                gencode_function("imul\n");
+            }  
+            else if(var1[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var1[0]);
+                gencode_function(tempbuf);
+                gencode_function("ldc 1.0\n");
+                gencode_function("fmul\n");
+            }
+        }
+        else if(var1[3] == 1){
+            char tempbuf[32];
+            if(var1[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var1[4]);
+                gencode_function(temp_parse->name);
+                if(var1[1] == 1){
+                    gencode_function(" I\n");
+                    gencode_function("ldc 1\n");
+                    gencode_function("imul\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function(" F\n");
+                    gencode_function("ldc 1.0\n");
+                    gencode_function("fmul\n");
+                }
+            }
+            else if(var1[5] == 0){
+                if(var1[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    gencode_function("ldc 1\n");
+                    gencode_function("imul\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    gencode_function("ldc 1.0\n");
+                    gencode_function("fmul\n");
+                }
+            }
+        }
+    }
+    else if(var1[2] == 1){
+        if(var1[1] == 1){
+            gencode_function("ldc 1\n");
+            gencode_function("imul\n");
+        }
+        else if(var1[1] == 2){
+            gencode_function("ldc 1.0\n");
+            gencode_function("fmul\n");
+        }
+    }
+}
+
+void gencode_negative(float* var1){
+    if(var1[2] == 0){
+        if(var1[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var1[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var1[0]);
+                gencode_function(tempbuf);
+                gencode_function("ldc -1\n");
+                gencode_function("imul\n");
+            }  
+            else if(var1[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var1[0]);
+                gencode_function(tempbuf);
+                gencode_function("ldc -1.0\n");
+                gencode_function("fmul\n");
+            }
+        }
+        else if(var1[3] == 1){
+            char tempbuf[32];
+            if(var1[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var1[4]);
+                gencode_function(temp_parse->name);
+                if(var1[1] == 1){
+                    gencode_function(" I\n");
+                    gencode_function("ldc -1\n");
+                    gencode_function("imul\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function(" F\n");
+                    gencode_function("ldc -1.0\n");
+                    gencode_function("fmul\n");
+                }
+            }
+            else if(var1[5] == 0){
+                if(var1[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    gencode_function("ldc -1\n");
+                    gencode_function("imul\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    gencode_function("ldc -1.0\n");
+                    gencode_function("fmul\n");
+                }
+            }
+        }
+    }
+    else if(var1[2] == 1){
+        if(var1[1] == 1){
+            gencode_function("ldc -1\n");
+            gencode_function("imul\n");
+        }
+        else if(var1[1] == 2){
+            gencode_function("ldc -1.0\n");
+            gencode_function("fmul\n");
+        }
+    }
+}
+
+void gencode_string_text(char* string_text){
+    if(scope_num > 0){
+        gencode_function("ldc \"");
+        gencode_function(string_text);
+        gencode_function("\"\n");
+    }
+}
+
+void gencode_INC_DEC(float* var1, int mode){
+    if(var1[2] == 0){
+        if(var1[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var1[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var1[0]);
+                gencode_function(tempbuf);
+                gencode_function("ldc 1\n");
+                if(mode == 0)
+                    gencode_function("iadd\n");
+                else    
+                    gencode_function("isub\n");
+            }  
+            else if(var1[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var1[0]);
+                gencode_function(tempbuf);
+                gencode_function("ldc 1.0\n");
+                if(mode == 0)
+                    gencode_function("fadd\n");
+                else    
+                    gencode_function("fsub\n");
+            }
+        }
+        else if(var1[3] == 1){
+            char tempbuf[32];
+            if(var1[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var1[4]);
+                gencode_function(temp_parse->name);
+                if(var1[1] == 1){
+                    gencode_function(" I\n");
+                    gencode_function("ldc 1\n");
+                    if(mode == 0)
+                        gencode_function("iadd\n");
+                    else    
+                        gencode_function("isub\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function(" F\n");
+                    gencode_function("ldc 1.0\n");
+                    if(mode == 0)
+                        gencode_function("fadd\n");
+                    else    
+                        gencode_function("fsub\n");
+                }
+            }
+            else if(var1[5] == 0){
+                if(var1[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    gencode_function("ldc 1\n");
+                    if(mode == 0)
+                        gencode_function("iadd\n");
+                    else    
+                        gencode_function("isub\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    gencode_function("ldc 1.0\n");
+                    if(mode == 0)
+                        gencode_function("fadd\n");
+                    else    
+                        gencode_function("fsub\n");
+                }
+            }
+        }
+    }
+    else if(var1[2] == 1){
+        if(var1[1] == 1){
+            gencode_function("ldc 1\n");
+            if(mode == 0)
+                gencode_function("iadd\n");
+            else    
+                gencode_function("isub\n");
+        }
+        else if(var1[1] == 2){
+            gencode_function("ldc 1.0\n");
+            if(mode == 0)
+                gencode_function("fadd\n");
+            else    
+                gencode_function("fsub\n");
+        }
+    }
+}
+
+void gencode_ADD_SUB_MUL_DIV_MOD(float* var1, float* var2, int mode){
+    if(var1[2] == 0){
+        if(var1[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var1[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var1[0]);
+                gencode_function(tempbuf);
+                if(var1[1] == 1 && var2[1] == 2)
+                    gencode_function("i2f\n");
+            }  
+            else if(var1[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var1[0]);
+                gencode_function(tempbuf);
+            }
+        }
+        else if(var1[3] == 1){
+            char tempbuf[32];
+            if(var1[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var1[4]);
+                gencode_function(temp_parse->name);
+                if(var1[1] == 1){
+                    gencode_function(" I\n");
+                    if(var1[1] == 1 && var2[1] == 2)
+                        gencode_function("i2f\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function(" F\n");
+                }
+            }
+            else if(var1[5] == 0){
+                if(var1[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    if(var1[1] == 1 && var2[1] == 2)
+                        gencode_function("i2f\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                }
+            }
+        }
+    }
+    else if(var1[2] == 1){
+        if(var1[1] == 1 && var2[1] == 2)
+            gencode_function("i2f\n"); 
+    }
+    if(var2[2] == 0){
+        if(var2[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var2[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var2[0]);
+                gencode_function(tempbuf);
+                if(var1[1] == 2 && var2[1] == 1)
+                    gencode_function("i2f\n");
+            }  
+            else if(var2[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var2[0]);
+                gencode_function(tempbuf);
+            }
+        }
+        else if(var2[3] == 1){
+            char tempbuf[32];
+            if(var2[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var2[4]);
+                gencode_function(temp_parse->name);
+                if(var2[1] == 1){
+                    gencode_function(" I\n");
+                    if(var1[1] == 2 && var2[1] == 1)
+                        gencode_function("i2f\n");
+                }  
+                else if(var2[1] == 2){
+                    gencode_function(" F\n");
+                }
+            }
+            else if(var2[5] == 0){
+                if(var2[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var2[4]);
+                    gencode_function(tempbuf);
+                    if(var1[1] == 2 && var2[1] == 1)
+                        gencode_function("i2f\n");
+                }  
+                else if(var2[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var2[4]);
+                    gencode_function(tempbuf);
+                }
+            }
+        }
+    }
+    else if(var2[2] == 1){
+        if(var1[1] == 2 && var2[1] == 1)
+            gencode_function("i2f\n"); 
+    }
+    if(var1[1] == 2 || var2[1] == 2){
+        if(mode == 0)
+            gencode_function("fadd\n");
+        else if(mode == 1)
+            gencode_function("fsub\n");
+        else if(mode == 2)
+            gencode_function("fmul\n");
+        else if(mode == 3)
+            gencode_function("fdiv\n");
+    }
+    else{
+        if(mode == 0)
+            gencode_function("iadd\n");
+        else if(mode == 1)
+            gencode_function("isub\n");
+        else if(mode == 2)
+            gencode_function("imul\n");
+        else if(mode == 3)
+            gencode_function("idiv\n");
+        else if(mode == 4)
+            gencode_function("irem\n");
+    }
+}
+
+void gencode_variable_define(float* var1){
+    if(var1[2] == 0){
+        if(var1[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var1[1] == 1 || 3 || 4){
+                sprintf(tempbuf, "%d\n", (int)var1[0]);
+                gencode_function(tempbuf);
+            }  
+            else if(var1[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var1[0]);
+                gencode_function(tempbuf);
+            }
+        }
+        else if(var1[3] == 1){
+            char tempbuf[32];
+            if(var1[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var1[4]);
+                gencode_function(temp_parse->name);
+                if(var1[1] == 1){
+                    gencode_function(" I\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function(" F\n");
+                }
+                else if(var1[1] == 3){
+                    gencode_function(" Z\n");
+                }
+                else if(var1[1] == 4){
+                    gencode_function(" S\n");
+                }
+                else if(var1[1] == 5){
+                    gencode_function(" V\n");
+                }
+            }
+            else if(var1[5] == 0){
+                if(var1[1] == 1 || 3 || 4){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                }  
+                else if(var1[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                }
+            }
+        }
+    }
 }

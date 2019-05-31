@@ -96,8 +96,14 @@ id			{letter}+({letter}|{digit})*
 
  /* String Constant */
 \"				        { CONCAT; BEGIN STRING_STATE; }
-<STRING_STATE>\"		{ CONCAT; BEGIN INITIAL; return STRING_TEXT; }
-<STRING_STATE>[^"]*		{ CONCAT; }
+<STRING_STATE>\"		{   CONCAT; BEGIN INITIAL;
+                            
+                        }
+<STRING_STATE>[^"]*		{   CONCAT; 
+                            yylval.string = (char*)malloc(sizeof(char)*strlen(yytext)+1);
+                            strcpy(yylval.string, yytext);
+                            return STRING_TEXT;    
+                        }
 
  /* Number Constant */
 {integer}	{ CONCAT; yylval.i_val = atoi(yytext); return I_CONST; }
