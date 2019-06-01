@@ -1,16 +1,16 @@
 
-void main() {
+int c = 77;
+float d =4.44;
+
+void hello(int rr, float kk) {
     int a = 5;
     float b = 35;
-    a += 7;
-    a -= 5;
-    a *= 5.5;
-    a /= 2;
-    a %= 1;
-    b += 787;
-    b -= 7.7;
-    b *= 2;
-    b /= 1.5;
+    if(a > 3);
+    else if(b < 7);
+    while(5 == 3);
+    if(c > a);
+    while(d != a);
+    kk = 7;
 
     return;
 }

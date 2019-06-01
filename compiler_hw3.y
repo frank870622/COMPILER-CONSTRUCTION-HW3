@@ -66,9 +66,10 @@ int syntax_error_flag = 0;
 int print_error_flag = 0;
 char now_in_function_name[128];
 char get_string_text_buf[128];
+int logical_stat_mode_flag = 0; //1:MT 2:LT 3:MTE 4:LTE 5:EQ 6:NE
 
 parse_table* get_symbol_by_index(int);
-
+parse_table* get_function_parse_by_name(char*);
 
 int file_delete_flag = 0;
 
@@ -86,8 +87,12 @@ void gencode_negative(float*);
 void gencode_string_text(char*);
 void gencode_INC_DEC(float*, int); //int == 0->INC, int == 1->DEC
 void gencode_ADD_SUB_MUL_DIV_MOD(float*, float*, int);   //int == 0->ADD, == 1->SUB, == 2->MUL, == 3->DIV, == 4->MOD
-void gencode_variable_define(float*);
+void gencode_variable_load(float*);
 void gencode_ASGN(float*);
+void gencode_MT_LT_MTE_LTE_EQ_NE(float*, float*, int);  //int == 0->MT, == 1->LT, == 2->MTE, == 3->LTE, == 4->EQ, == 5->NE
+void gencode_function_define(char*);
+void gencode_function_call(char*);
+
 %}
 
 /* Use variable or self-defined structure to represent
@@ -214,7 +219,7 @@ declaration
             }
             else if(scope_num > 0){
                 char tempbuf[32];
-                gencode_variable_define($4);
+                gencode_variable_load($4);
                 if($1 == 1 && $4[1] == 2)
                     gencode_function("f2i\n");
                 else if($1 == 2 && $4[1] == 1)
@@ -575,15 +580,41 @@ function_declation_part1
 ;
 
 function_declation_part2
-    : function_parameter RB SEMICOLON   {function_initial_flag = 0;}
-    | RB SEMICOLON  {function_initial_flag = 0;}
-    | function_parameter RB LCB stat_list RCB   {function_initial_flag = 1;}
-    | RB LCB stat_list RCB  
+    : function_parameter RB SEMICOLON   {
+        function_initial_flag = 0;
+    }
+    | RB SEMICOLON  {
+        function_initial_flag = 0;
+    }
+    | function_parameter function_declation_RB1 function_declation_part3   {
+        function_initial_flag = 1;
+    }
+    | function_declation_RB2 function_declation_part3  
     {
         function_initial_flag = 1;
         function_parameter_num = 0;
     }
 ;
+
+function_declation_RB1
+    : RB {
+        gencode_function_define(now_in_function_name);
+    }
+;
+
+function_declation_RB2
+    : RB {
+        function_parameter_num = 0;
+        gencode_function_define(now_in_function_name);
+    }
+;
+
+function_declation_part3
+    : LCB stat_list RCB {
+        gencode_function(".end method\n");
+    }
+;
+
 
 function_parameter
     : type ID   {
@@ -646,7 +677,7 @@ else_stat_part2
 
 logical_stats
     : logical_stat  { 
-        $$[0] = $1[0];  $$[1] = 3; 
+        $$[0] = $1[0];  $$[1] = $1[1]; 
         $$[2] = $1[2];  $$[3] = $1[3];
         $$[4] = $1[4];  $$[5] = $1[5];
     }
@@ -657,40 +688,65 @@ logical_stat
     {
         if($1[0] > $3[0])   $$[0] = 1;
         else                $$[0] = 0;
-        $$[1] = 1;
+        $$[1] = 3;
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_MT_LT_MTE_LTE_EQ_NE($1, $3, 0);
+
     }
     | arithmetic_stat LT arithmetic_stat
     {
         if($1[0] < $3[0])   $$[0] = 1;
         else                $$[0] = 0;
-        $$[1] = 1;
+        $$[1] = 3;
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_MT_LT_MTE_LTE_EQ_NE($1, $3, 1);
     }
     | arithmetic_stat MTE arithmetic_stat
     {
         if($1[0] >= $3[0])  $$[0] = 1;
         else                $$[0] = 0;
-        $$[1] = 1;
+        $$[1] = 3;
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_MT_LT_MTE_LTE_EQ_NE($1, $3, 2);
     }
     | arithmetic_stat LTE arithmetic_stat
     {
         if($1[0] <= $3[0])  $$[0] = 1;
         else                $$[0] = 0;
-        $$[1] = 1;
+        $$[1] = 3;
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_MT_LT_MTE_LTE_EQ_NE($1, $3, 3);
     }
     | arithmetic_stat EQ arithmetic_stat
     {
         if($1[0] == $3[0])  $$[0] = 1;
         else                $$[0] = 0;
-        $$[1] = 1;
+        $$[1] = 3;
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_MT_LT_MTE_LTE_EQ_NE($1, $3, 4);
     }
     | arithmetic_stat NE arithmetic_stat
     {
         if($1[0] != $3[0])  $$[0] = 1;
         else                $$[0] = 0;
-        $$[1] = 1;
+        $$[1] = 3;
+        $$[2] = 1;  $$[3] = 0;
+        $$[4] = -1; $$[5] = -1;
+
+        gencode_MT_LT_MTE_LTE_EQ_NE($1, $3, 5);
     }
     | arithmetic_stat   { 
-        $$[0] = $1[0]; $$[1] = $1[1];
+        $$[0] = $1[0];  $$[1] = $1[1];
         $$[2] = $1[2];  $$[3] = $1[3];
         $$[4] = $1[4];  $$[5] = $1[5];
     }
@@ -715,14 +771,36 @@ expression_stat
     | function_call SEMICOLON
     | RETURN arithmetic_stat SEMICOLON
     {
-        if(get_symbol_type(now_in_function_name) != $2[1]){
+        if(get_symbol_type(now_in_function_name) != $2[1] && get_symbol_type(now_in_function_name) > 2){
             print_error("function return type is not the same ", now_in_function_name);
+        }
+        else{
+            gencode_variable_load($2);
+            if(get_symbol_type(now_in_function_name) == 1){
+                if($2[1] == 2)  gencode_function("f2i\n");
+                gencode_function("ireturn\n");
+            }
+            else if(get_symbol_type(now_in_function_name) == 2){
+                if($2[1] == 1)  gencode_function("i2f\n");
+                gencode_function("freturn\n");
+            }
+            else if(get_symbol_type(now_in_function_name) == 3){
+                if($2[1] == 2)  gencode_function("f2i\n");
+                gencode_function("ireturn\n");
+            }
+            else if(get_symbol_type(now_in_function_name) == 4){
+                if($2[1] == 2)  gencode_function("f2i\n");
+                gencode_function("ireturn\n");
+            }
         }
     }
     | RETURN SEMICOLON
     {
         if(get_symbol_type(now_in_function_name) != 5){
             print_error("function return type is not the same ", now_in_function_name);
+        }
+        else{
+            gencode_function("return\n");
         }
     }
 ;
@@ -733,7 +811,7 @@ assignment_stat
             print_error("Undeclared variable ", $1);
         else{
             char tempbuf[32];
-            gencode_variable_define($3);
+            gencode_variable_load($3);
             if (get_symbol_type($1) == 1){
                     if($3[1] == 2)  gencode_function("f2i\n");
                     gencode_function("istore ");
@@ -1030,10 +1108,30 @@ function_call
         else{
             $$[0] = 100;
             $$[1] = get_symbol_type($1);
+            $$[2] = 1;  $$[3] = 0;
+            $$[4] = -1; $$[5] = 0;
 
             if(check_fun_call_error($1) == -1){
                 print_error("Function call parameter error ", $1);
             }
+
+            gencode_function_call($1);
+        }
+    }
+    | ID LB RB {
+        if(lookup_symbol($1) == -1)
+            print_error("Undeclared function ", $1);
+        else{
+            $$[0] = 100;
+            $$[1] = get_symbol_type($1);
+            $$[2] = 1;  $$[3] = 0;
+            $$[4] = -1; $$[5] = 0;
+
+            if(check_fun_call_error($1) == -1){
+                print_error("Function call parameter error ", $1);
+            }
+
+            gencode_function_call($1);
         }
     }
 ;
@@ -1043,11 +1141,15 @@ function_send_parameter
     {
         function_call_parameter_array[function_call_parameter_num] = $3[1];
         ++function_call_parameter_num;
+
+        gencode_variable_load($3);
     }
     | logical_stats
     {
         function_call_parameter_array[function_call_parameter_num] = $1[1];
         ++function_call_parameter_num;
+
+        gencode_variable_load($1);
     }
 ;
 
@@ -1080,7 +1182,7 @@ int main(int argc, char** argv)
 
     gencode_function(".class public compiler_hw3\n"
                     ".super java/lang/Object\n"
-                    ".method public static main([Ljava/lang/String;)V\n");
+                    );
 
     yyparse();
     if(syntax_error_flag == 0){
@@ -1099,8 +1201,6 @@ int main(int argc, char** argv)
         printf("\nTotal lines: %d \n",yylineno);
     }
 
-    gencode_function("\treturn\n"
-                  ".end method\n");
     if(syntax_error_flag == 0)
         fclose(file);
 
@@ -1310,10 +1410,12 @@ int check_fun_call_error(char* Name){
         if(strcmp(temp->name, Name) == 0){
             if(temp->parameter_num != function_call_parameter_num){
                 reset_function_call_array();
+                printf("function parameter num error\n");
                 return -1;      //mean error occur
             }
             for(int i=0; i<temp->parameter_num; ++i){
                 if(temp->attribute[i] != function_call_parameter_array[i]){
+                    printf("function parameter type error\n");
                     reset_function_call_array();
                     return -1;      //mean error occur
                 }
@@ -1432,6 +1534,18 @@ parse_table* get_symbol_by_index(int INDEX){
             return temp;
         }
     }   
+}
+
+parse_table* get_function_parse_by_name(char* Name){
+    parse_table* temp = head;
+    while(temp->next != NULL){
+        temp = temp->next;
+        if(strcmp(temp->name, Name) == 0 && temp->kind == 2){
+            return temp;
+        }
+    }  
+    printf("can't find function parse by name\n");
+    return NULL;
 }
 
 int check_global_variable(char* Name){
@@ -1853,7 +1967,7 @@ void gencode_ADD_SUB_MUL_DIV_MOD(float* var1, float* var2, int mode){
     }
 }
 
-void gencode_variable_define(float* var1){
+void gencode_variable_load(float* var1){
     if(var1[2] == 0){
         if(var1[3] == 0){
             gencode_function("ldc ");
@@ -1903,4 +2017,181 @@ void gencode_variable_define(float* var1){
             }
         }
     }
+}
+
+void gencode_MT_LT_MTE_LTE_EQ_NE(float* var1, float* var2, int mode){
+    if(var1[2] == 0){
+        if(var1[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var1[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var1[0]);
+                gencode_function(tempbuf);
+                if(var1[1] == 1 && var2[1] == 2)
+                    gencode_function("i2f\n");
+            }  
+            else if(var1[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var1[0]);
+                gencode_function(tempbuf);
+            }
+        }
+        else if(var1[3] == 1){
+            char tempbuf[32];
+            if(var1[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var1[4]);
+                gencode_function(temp_parse->name);
+                if(var1[1] == 1){
+                    gencode_function(" I\n");
+                    if(var1[1] == 1 && var2[1] == 2)
+                        gencode_function("i2f\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function(" F\n");
+                }
+            }
+            else if(var1[5] == 0){
+                if(var1[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                    if(var1[1] == 1 && var2[1] == 2)
+                        gencode_function("i2f\n");
+                }  
+                else if(var1[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                }
+            }
+        }
+    }
+    else if(var1[2] == 1){
+        if(var1[1] == 1 && var2[1] == 2)
+            gencode_function("i2f\n"); 
+    }
+    if(var2[2] == 0){
+        if(var2[3] == 0){
+            gencode_function("ldc ");
+            char tempbuf[32];
+            if(var2[1] == 1){
+                sprintf(tempbuf, "%d\n", (int)var2[0]);
+                gencode_function(tempbuf);
+                if(var1[1] == 2 && var2[1] == 1)
+                    gencode_function("i2f\n");
+            }  
+            else if(var2[1] == 2){
+                sprintf(tempbuf, "%f\n", (float)var2[0]);
+                gencode_function(tempbuf);
+            }
+        }
+        else if(var2[3] == 1){
+            char tempbuf[32];
+            if(var2[5] == 1){
+                gencode_function("getstatic compiler_hw3/");
+                parse_table *temp_parse = get_symbol_by_index(var2[4]);
+                gencode_function(temp_parse->name);
+                if(var2[1] == 1){
+                    gencode_function(" I\n");
+                    if(var1[1] == 2 && var2[1] == 1)
+                        gencode_function("i2f\n");
+                }  
+                else if(var2[1] == 2){
+                    gencode_function(" F\n");
+                }
+            }
+            else if(var2[5] == 0){
+                if(var2[1] == 1){
+                    gencode_function("iload ");
+                    sprintf(tempbuf, "%d\n", (int)var2[4]);
+                    gencode_function(tempbuf);
+                    if(var1[1] == 2 && var2[1] == 1)
+                        gencode_function("i2f\n");
+                }  
+                else if(var2[1] == 2){
+                    gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var2[4]);
+                    gencode_function(tempbuf);
+                }
+            }
+        }
+    }
+    else if(var2[2] == 1){
+        if(var1[1] == 2 && var2[1] == 1)
+            gencode_function("i2f\n"); 
+    }
+    if(var1[1] == 2 || var2[1] == 2){
+        gencode_function("fsub\n");
+    }
+    else{
+        gencode_function("isub\n");
+    }
+    logical_stat_mode_flag = mode + 1;
+}
+
+void gencode_function_define(char* Name){
+    gencode_function(".method public static ");
+    gencode_function(Name);
+    if (strcmp("main", Name) == 0){
+        gencode_function("([Ljava/lang/String;)V\n");
+    }
+    else{
+        gencode_function("(");
+        for(int i=0; i<function_parameter_num; ++i){
+            if(function_parameter_array[i] == 1)
+                gencode_function("I");
+            else if(function_parameter_array[i] == 2)
+                gencode_function("F");
+            else if(function_parameter_array[i] == 3)
+                gencode_function("Z");
+            else if(function_parameter_array[i] == 4)
+                gencode_function("S");
+            else if(function_parameter_array[i] == 5)
+                gencode_function("V");
+        }
+        gencode_function(")");
+
+        if(get_symbol_type(Name) == 1)
+            gencode_function("I\n");
+        else if(get_symbol_type(Name) == 2)
+            gencode_function("F\n");
+        else if(get_symbol_type(Name) == 3)
+            gencode_function("Z\n");
+        else if(get_symbol_type(Name) == 4)
+            gencode_function("S\n");
+        else if(get_symbol_type(Name) == 5)
+            gencode_function("V\n");
+    }
+    gencode_function(".limit stack 50\n");
+    gencode_function(".limit locals 50\n");
+}
+
+void gencode_function_call(char* Name){
+    gencode_function("invokestatic compiler_hw3/");
+    gencode_function(Name);
+    gencode_function("(");
+    parse_table* temp_parse =  get_function_parse_by_name(Name);
+    for(int i = 0; i < temp_parse->parameter_num; ++i){
+        if(temp_parse->attribute[i] == 1)
+            gencode_function("I");
+        else if(temp_parse->attribute[i] == 2)
+            gencode_function("F");
+        else if(temp_parse->attribute[i] == 3)
+            gencode_function("Z");
+        else if(temp_parse->attribute[i] == 4)
+            gencode_function("S");
+        else if(temp_parse->attribute[i] == 5)
+            gencode_function("V");
+    }
+    gencode_function(")");
+    if(temp_parse->type == 1)
+        gencode_function("I\n");
+    else if(temp_parse->type == 2)
+        gencode_function("F\n");
+    else if(temp_parse->type == 3)
+        gencode_function("Z\n");
+    else if(temp_parse->type == 4)
+        gencode_function("S\n");
+    else if(temp_parse->type == 5)
+        gencode_function("V\n");
 }
