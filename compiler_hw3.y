@@ -87,6 +87,7 @@ void gencode_string_text(char*);
 void gencode_INC_DEC(float*, int); //int == 0->INC, int == 1->DEC
 void gencode_ADD_SUB_MUL_DIV_MOD(float*, float*, int);   //int == 0->ADD, == 1->SUB, == 2->MUL, == 3->DIV, == 4->MOD
 void gencode_variable_define(float*);
+void gencode_ASGN(float*);
 %}
 
 /* Use variable or self-defined structure to represent
@@ -644,7 +645,11 @@ else_stat_part2
 ;
 
 logical_stats
-    : logical_stat  { $$[0] = $1[0]; $$[1] = $1[1]; }
+    : logical_stat  { 
+        $$[0] = $1[0];  $$[1] = 3; 
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
 ;
 
 logical_stat
@@ -684,7 +689,11 @@ logical_stat
         else                $$[0] = 0;
         $$[1] = 1;
     }
-    | arithmetic_stat   { $$[0] = $1[0]; $$[1] = $1[1]; }
+    | arithmetic_stat   { 
+        $$[0] = $1[0]; $$[1] = $1[1];
+        $$[2] = $1[2];  $$[3] = $1[3];
+        $$[4] = $1[4];  $$[5] = $1[5];
+    }
 ;
 
 while_stat
@@ -722,29 +731,296 @@ assignment_stat
     : ID ASGN arithmetic_stat {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
+        else{
+            char tempbuf[32];
+            gencode_variable_define($3);
+            if (get_symbol_type($1) == 1){
+                    if($3[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 2){
+                    if($3[1] == 1) gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 3){
+                    if($3[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+            }
+        }
     }
     | ID ADDASGN arithmetic_stat {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
+        else{
+            char tempbuf[32];
+            float var1[6];
+            var1[0] = get_symbol_value($1);
+            var1[1] = get_symbol_type($1);
+            var1[2] = 0;
+            var1[3] = 1;
+            var1[4] = find_stack_num_of_local_var($1);
+            var1[5] = 0;
+
+            gencode_ADD_SUB_MUL_DIV_MOD(var1, $3, 0);
+
+            var1[0] = var1[0] + $3[0];
+            var1[1] = (var1[1] == 2 || $3[1] == 2)? 2:1;
+            var1[2] = 1;
+
+            if (get_symbol_type($1) == 1){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 2){
+                    if(var1[1] == 1) gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 3){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+            }
+
+        }
     }
     | ID SUBASGN arithmetic_stat {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
+        else{
+            char tempbuf[32];
+            float var1[6];
+            var1[0] = get_symbol_value($1);
+            var1[1] = get_symbol_type($1);
+            var1[2] = 0;
+            var1[3] = 1;
+            var1[4] = find_stack_num_of_local_var($1);
+            var1[5] = 0;
+
+            gencode_ADD_SUB_MUL_DIV_MOD(var1, $3, 1);
+
+            var1[0] = var1[0] - $3[0];
+            var1[1] = (var1[1] == 2 || $3[1] == 2)? 2:1;
+            var1[2] = 1;
+
+            if (get_symbol_type($1) == 1){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 2){
+                    if(var1[1] == 1) gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 3){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+            }
+
+        }
     }
     | ID MULASGN arithmetic_stat {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
+        else{
+            char tempbuf[32];
+            float var1[6];
+            var1[0] = get_symbol_value($1);
+            var1[1] = get_symbol_type($1);
+            var1[2] = 0;
+            var1[3] = 1;
+            var1[4] = find_stack_num_of_local_var($1);
+            var1[5] = 0;
+
+            gencode_ADD_SUB_MUL_DIV_MOD(var1, $3, 2);
+
+            var1[0] = var1[0] * $3[0];
+            var1[1] = (var1[1] == 2 || $3[1] == 2)? 2:1;
+            var1[2] = 1;
+
+            if (get_symbol_type($1) == 1){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 2){
+                    if(var1[1] == 1) gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 3){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+            }
+        }
     }
     | ID DIVASGN arithmetic_stat {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
+        else if($3[0] == 0){
+            print_error("Divided by Zero", "");
+        }
+        else{
+            char tempbuf[32];
+            float var1[6];
+            var1[0] = get_symbol_value($1);
+            var1[1] = get_symbol_type($1);
+            var1[2] = 0;
+            var1[3] = 1;
+            var1[4] = find_stack_num_of_local_var($1);
+            var1[5] = 0;
+
+            gencode_ADD_SUB_MUL_DIV_MOD(var1, $3, 3);
+
+            var1[0] = var1[0] / $3[0];
+            var1[1] = (var1[1] == 2 || $3[1] == 2)? 2:1;
+            var1[2] = 1;
+
+            if (get_symbol_type($1) == 1){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 2){
+                    if(var1[1] == 1) gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 3){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+            }
+        }
     }
     | ID MODASGN arithmetic_stat {
         if(lookup_symbol($1) == -1)
             print_error("Undeclared variable ", $1);
+        else if (get_symbol_type($1) != 1 || $3[1] != 1){
+            print_error("invalid operands to binary %", "");
+        }
+        else if ($3[0] == 0){
+            print_error("Mod by Zero", "");
+        }
+        else{
+            char tempbuf[32];
+            float var1[6];
+            var1[0] = get_symbol_value($1);
+            var1[1] = get_symbol_type($1);
+            var1[2] = 0;
+            var1[3] = 1;
+            var1[4] = find_stack_num_of_local_var($1);
+            var1[5] = 0;
+
+            gencode_ADD_SUB_MUL_DIV_MOD(var1, $3, 4);
+
+            var1[0] = (int)var1[0] % (int)$3[0];
+            var1[1] = 1;
+            var1[2] = 1;
+
+            if (get_symbol_type($1) == 1){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 2){
+                    if(var1[1] == 1) gencode_function("i2f\n");
+                    gencode_function("fstore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 3){
+                    if(var1[1] == 2)  gencode_function("f2i\n");
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 4){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+                }
+                else if (get_symbol_type($1) == 5){
+                    gencode_function("istore ");
+                    sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
+                    gencode_function(tempbuf);
+            }
+        }
+        
     }
-    | arithmetic_stat
-    | assignment_stat COMMA assignment_stat
 ;
 
 function_call
