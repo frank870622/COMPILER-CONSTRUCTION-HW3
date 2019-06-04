@@ -256,7 +256,7 @@ declaration
                     gencode_function(tempbuf);
                 }
                 else if ($1 == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
                     gencode_function(tempbuf);
                 }
@@ -320,7 +320,7 @@ declaration
                 }
                 else if ($1 == 4){
                     gencode_function("ldc ""\n");
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
                     gencode_function(tempbuf);
                 }
@@ -475,11 +475,11 @@ lv3_arithmetic_stat
                     gencode_function(tempbuf);
                 }
                 else if ($2[1] == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", (int)$2[4]);
                     gencode_function(tempbuf);
 
-                    gencode_function("iload ");
+                    gencode_function("aload ");
                     sprintf(tempbuf, "%d\n", (int)$2[4]);
                     gencode_function(tempbuf);
                 }
@@ -543,11 +543,11 @@ lv3_arithmetic_stat
                     gencode_function(tempbuf);
                 }
                 else if ($2[1] == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", (int)$2[4]);
                     gencode_function(tempbuf);
 
-                    gencode_function("iload ");
+                    gencode_function("aload ");
                     sprintf(tempbuf, "%d\n", (int)$2[4]);
                     gencode_function(tempbuf);
                 }
@@ -595,7 +595,7 @@ lv3_arithmetic_stat
                     gencode_function(tempbuf);
                 }
                 else if ($1[1] == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", (int)$1[4]);
                     gencode_function(tempbuf);
                 }
@@ -639,7 +639,7 @@ lv3_arithmetic_stat
                     gencode_function(tempbuf);
                 }
                 else if ($1[1] == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", (int)$1[4]);
                     gencode_function(tempbuf);
                 }
@@ -735,7 +735,7 @@ value
                     gencode_function(" Ljava/lang/String;\n");
                 }
                 else{
-                    gencode_function("iload ");
+                    gencode_function("aload ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1171,7 +1171,7 @@ assignment_stat
                         gencode_function(tempbuf);
                     }
                     else if (get_symbol_type($1) == 4){
-                        gencode_function("istore ");
+                        gencode_function("astore ");
                         sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                         gencode_function(tempbuf);
                     }
@@ -1228,7 +1228,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1285,7 +1285,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1342,7 +1342,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1402,7 +1402,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1465,7 +1465,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1512,7 +1512,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($2) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
                     gencode_function(tempbuf);
                 }
@@ -1559,7 +1559,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($2) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($2));
                     gencode_function(tempbuf);
                 }
@@ -1606,7 +1606,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -1653,7 +1653,7 @@ assignment_stat
                     gencode_function(tempbuf);
                 }
                 else if (get_symbol_type($1) == 4){
-                    gencode_function("istore ");
+                    gencode_function("astore ");
                     sprintf(tempbuf, "%d\n", find_stack_num_of_local_var($1));
                     gencode_function(tempbuf);
                 }
@@ -2580,13 +2580,18 @@ void gencode_variable_load(float* var1){
                 }
             }
             else if(var1[5] == 0){
-                if(var1[1] == 1 || 3 || 4){
+                if(var1[1] == 1 || 3){
                     gencode_function("iload ");
                     sprintf(tempbuf, "%d\n", (int)var1[4]);
                     gencode_function(tempbuf);
                 }  
                 else if(var1[1] == 2){
                     gencode_function("fload ");
+                    sprintf(tempbuf, "%d\n", (int)var1[4]);
+                    gencode_function(tempbuf);
+                }
+                else if(var1[1] == 4){
+                    gencode_function("aload ");
                     sprintf(tempbuf, "%d\n", (int)var1[4]);
                     gencode_function(tempbuf);
                 }
