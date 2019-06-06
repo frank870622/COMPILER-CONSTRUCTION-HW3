@@ -58,7 +58,7 @@ int variable_declare_count = 0;
 int function_initial_flag = 0;
 int function_has_declare_flag = 0;
 int function_parameter_array[512];
-int function_call_parameter_array[512];
+float function_call_parameter_array[512][6];
 char error_buf[256];
 int had_print_flag = 0;
 int dump_scope_flag = -1;
@@ -1705,17 +1705,24 @@ function_call
 function_send_parameter
     : function_send_parameter COMMA logical_stats
     {
-        function_call_parameter_array[function_call_parameter_num] = $3[1];
+        function_call_parameter_array[function_call_parameter_num][0] = $3[0];
+        function_call_parameter_array[function_call_parameter_num][1] = $3[1];
+        function_call_parameter_array[function_call_parameter_num][2] = $3[2];
+        function_call_parameter_array[function_call_parameter_num][3] = $3[3];
+        function_call_parameter_array[function_call_parameter_num][4] = $3[4];
+        function_call_parameter_array[function_call_parameter_num][5] = $3[5];
         ++function_call_parameter_num;
 
-        gencode_variable_load($3);
     }
     | logical_stats
     {
-        function_call_parameter_array[function_call_parameter_num] = $1[1];
+        function_call_parameter_array[function_call_parameter_num][0] = $1[0];
+        function_call_parameter_array[function_call_parameter_num][1] = $1[1];
+        function_call_parameter_array[function_call_parameter_num][2] = $1[2];
+        function_call_parameter_array[function_call_parameter_num][3] = $1[3];
+        function_call_parameter_array[function_call_parameter_num][4] = $1[4];
+        function_call_parameter_array[function_call_parameter_num][5] = $1[5];
         ++function_call_parameter_num;
-
-        gencode_variable_load($1);
     }
 ;
 
@@ -1986,14 +1993,23 @@ int check_fun_call_error(char* Name){
         if(strcmp(temp->name, Name) == 0){
             if(temp->parameter_num != function_call_parameter_num){
                 reset_function_call_array();
-                printf("function parameter num error\n");
+                print_error("function parameter num error\n", "");
                 return -1;      //mean error occur
             }
             for(int i=0; i<temp->parameter_num; ++i){
-                if(temp->attribute[i] != function_call_parameter_array[i]){
-                    printf("function parameter type error\n");
-                    reset_function_call_array();
-                    return -1;      //mean error occur
+                gencode_variable_load(function_call_parameter_array[i]);
+                if(temp->attribute[i] != function_call_parameter_array[i][1]){
+                    if((temp->attribute[i] == 1 || temp->attribute[i] == 3) && function_call_parameter_array[i][1] == 2){
+                        gencode_function("f2i\n");
+                    }
+                    else if(temp->attribute[i] == 2 && (function_call_parameter_array[i][1] == 1 || function_call_parameter_array[i][1] ==3)){
+                        gencode_function("i2f\n");
+                    }
+                    else{
+                        print_error("function parameter type error\n", "");
+                        reset_function_call_array();
+                        return -1;      //mean error occur
+                    }
                 }
             }
             reset_function_call_array();
@@ -2164,7 +2180,8 @@ void reset_function_array(){
 
 void reset_function_call_array(){
     for(int i=0; i<512; ++i)
-        function_call_parameter_array[i] = -1;
+        for(int j=0; j<6; ++j)
+            function_call_parameter_array[i][j] = -1;
     function_call_parameter_num = 0;
 }
 
@@ -2548,7 +2565,7 @@ void gencode_variable_load(float* var1){
         if(var1[3] == 0){
             gencode_function("ldc ");
             char tempbuf[32];
-            if(var1[1] == 1 || 3 || 4){
+            if(var1[1] == 1 || var1[1] == 3 || var1[1] == 4){
                 sprintf(tempbuf, "%d\n", (int)var1[0]);
                 gencode_function(tempbuf);
             }  
@@ -2580,7 +2597,7 @@ void gencode_variable_load(float* var1){
                 }
             }
             else if(var1[5] == 0){
-                if(var1[1] == 1 || 3){
+                if(var1[1] == 1 || var1[1] == 3){
                     gencode_function("iload ");
                     sprintf(tempbuf, "%d\n", (int)var1[4]);
                     gencode_function(tempbuf);
