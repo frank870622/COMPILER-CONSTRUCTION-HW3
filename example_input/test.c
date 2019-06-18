@@ -1,9 +1,12 @@
+string ggg = "jeee";
 
-
-void lol(int a);
+int doo(int g){
+   return 2 * g;
+}
 
 void main(){
-   string a = "hello";
+   int a;
+   a = 3 + doo(5);
    print(a);
    return;
 }

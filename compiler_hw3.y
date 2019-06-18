@@ -222,9 +222,9 @@ declaration
                     gencode_function(tempbuf);
                 }
                 else if ($1 == 4){
-                    gencode_function("Ljava/lang/String; = ");
+                    gencode_function("Ljava/lang/String; = \"");
                     gencode_function(get_string_text_buf);
-                    gencode_function("\n");
+                    gencode_function("\"\n");
                 }
                 else if ($1 == 5){
                     gencode_function("V = ");
@@ -282,19 +282,19 @@ declaration
                 gencode_function(" ");
                 char tempbuf[32];
                 if ($1 == 1){
-                    gencode_function("I\n");
+                    gencode_function("I = 0\n");
                 }
                 else if ($1 == 2){
                     gencode_function("F\n");
                 }
                 else if ($1 == 3){
-                    gencode_function("Z\n");
+                    gencode_function("Z = 0\n");
                 }
                 else if ($1 == 4){
                     gencode_function("Ljava/lang/String;\n");
                 }
                 else if ($1 == 5){
-                    gencode_function("V\n");
+                    gencode_function("V = 0\n");
                 }
             }
             else if(scope_num > 0){
