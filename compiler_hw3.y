@@ -2719,7 +2719,8 @@ void gencode_MT_LT_MTE_LTE_EQ_NE(float* var1, float* var2, int mode){
             gencode_function("i2f\n"); 
     }
     if(var1[1] == 2 || var2[1] == 2){
-        gencode_function("fsub\n");
+        //gencode_function("fsub\n");
+        gencode_function("fcmpl\n");
     }
     else{
         gencode_function("isub\n");
